@@ -1,0 +1,42 @@
+name: petka
+services:
+  db:
+    image: postgres:17-bookworm
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${PGPORT:-55432}:5432"
+    environment:
+      POSTGRES_DB: petka
+      POSTGRES_USER: petka
+      POSTGRES_PASSWORD: ${PGPASSWORD:?Nastavi PGPASSWORD v datoteki .env}
+    volumes:
+      - petka_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U petka -d petka"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+  app:
+    profiles: ["app"]
+    build: .
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3002:3000"
+    environment:
+      GAME_SECRET: ${GAME_SECRET:-}
+      WORD_SOURCE: postgres
+      PGHOST: db
+      PGPORT: 5432
+      PGDATABASE: petka
+      PGUSER: petka
+      PGPASSWORD: ${PGPASSWORD:?Nastavi PGPASSWORD}
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+volumes:
+  petka_db_data:

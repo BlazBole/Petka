@@ -1,0 +1,12 @@
+Sloleks 3.1 — Morphological Lexicon of Slovene
+Source: https://www.clarin.si/repository/xmlui/handle/11356/2080
+Identifier: http://hdl.handle.net/11356/2080
+Release: 2026-02-03
+Authors (as listed in the supplied 00README.txt): Čibej, Jaka; Gantar, Kaja; Dobrovoljc, Kaja; Krek, Simon; Holozan, Peter; Erjavec, Tomaž; Romih, Miro; Arhar Holdt, Špela; Krsnik, Luka; Robnik-Šikonja, Marko.
+Publisher: Centre for Language Resources and Technologies, University of Ljubljana.
+License of the source and adapted Sloleks-derived word collection: Creative Commons Attribution-ShareAlike 4.0 International (CC BY-SA 4.0).
+License: https://creativecommons.org/licenses/by-sa/4.0/
+
+Changes made by the Petka importer: selection of orthographic forms; Unicode NFC normalization and uppercase conversion; filtering to five letters of the Slovene alphabet; exclusion of proper names, abbreviations, residual/multiword entries and marked nonstandard forms; deduplication; maximum observed frequency; candidate export restricted to common-noun lemma forms in the nominative. No endorsement is implied.
+
+The original Sloleks dataset is NOT included in this project archive. Import it locally from your downloaded archive. When distributing the derived word collection (including candidates.csv), retain this attribution and license notice and make it available under CC BY-SA 4.0. The hand-written initial Petka word selection is separate from Sloleks. This notice describes the data, not a blanket license assignment to the application code.

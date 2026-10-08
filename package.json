@@ -1,0 +1,35 @@
+{
+  "name": "petka",
+  "version": "1.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --hostname 0.0.0.0 --port 3002",
+    "build": "next build",
+    "start": "next start --hostname 0.0.0.0 --port 3002",
+    "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test tests/*.test.ts",
+    "db:up": "docker compose up -d db",
+    "db:stop": "docker compose stop db",
+    "db:init": "node --import tsx scripts/db-init.ts",
+    "import:sloleks": "node --import tsx scripts/import-sloleks.ts"
+  },
+  "dependencies": {
+    "@next/env": "^16.4.0",
+    "lucide-react": "^0.468.0",
+    "next": "16.4.0",
+    "pg": "^8.23.1",
+    "react": "19.2.4",
+    "react-dom": "19.2.4",
+    "saxes": "^6.0.0",
+    "yauzl": "^3.4.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@types/pg": "^8.23.1",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@types/yauzl": "^3.4.0",
+    "tsx": "^4.20.0",
+    "typescript": "^5.9.0"
+  }
+}
