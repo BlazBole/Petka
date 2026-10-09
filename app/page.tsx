@@ -1,6 +1,6 @@
 'use client';
 import {useCallback, useEffect, useRef, useState} from 'react';
-import {BarChart3, BookOpen, CalendarDays, Check, ChevronRight, CircleHelp, Delete, Infinity as InfinityIcon, Menu, Sparkles, Trophy, X} from 'lucide-react';
+import {BarChart3, BookOpen, CalendarDays, Check, ChevronRight, CircleHelp, Delete, Infinity as InfinityIcon, Menu, RotateCcw, Sparkles, Trophy, X} from 'lucide-react';
 import {GameView, ljubljanaDay, MAX_GUESSES, Mode, secondsUntilMidnight} from '@/lib/game';
 import {addResult, Result, summarize} from '@/lib/stats';
 type Panel = 'help' | 'stats' | 'result' | null;
@@ -18,6 +18,7 @@ export default function Home(){
   const [results,setResults]=useState<Result[]>([]),[statsMode,setStatsMode]=useState<Mode>('daily'),[today,setToday]=useState('');
   const [storageWarning,setStorageWarning]=useState(false),[now,setNow]=useState<Date|null>(null);
   const dialog=useRef<HTMLDialogElement>(null), lock=useRef(false),init=useRef(false), focusBefore=useRef<HTMLElement|null>(null);
+  const menuPanel=useRef<HTMLDivElement>(null), menuButton=useRef<HTMLButtonElement>(null);
   const commit=useCallback((g:GameView,persist=true)=>{
     setGame(g);setInput('');
     if(persist&&!save(g.mode,g))setStorageWarning(true);
@@ -54,6 +55,25 @@ export default function Home(){
     else if(dialog.current?.open){dialog.current.close();focusBefore.current?.focus();}
   },[panel]);
   useEffect(()=>{
+    if(!menu)return;
+    const previousOverflow=document.body.style.overflow;
+    document.body.style.overflow='hidden';
+    const desktop=window.matchMedia('(min-width:761px)');
+    const onResize=()=>{if(desktop.matches)setMenu(false);};
+    desktop.addEventListener('change',onResize);
+    menuPanel.current?.querySelector<HTMLButtonElement>('button:not(:disabled)')?.focus();
+    const handler=(e:KeyboardEvent)=>{
+      if(e.key==='Escape'){e.preventDefault();setMenu(false);return;}
+      if(e.key!=='Tab')return;
+      const buttons=Array.from(menuPanel.current?.querySelectorAll<HTMLButtonElement>('button:not(:disabled)')||[]);
+      const first=buttons[0],last=buttons[buttons.length-1];
+      if(e.shiftKey&&document.activeElement===first){e.preventDefault();last?.focus();}
+      else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first?.focus();}
+    };
+    window.addEventListener('keydown',handler);
+    return()=>{document.body.style.overflow=previousOverflow;desktop.removeEventListener('change',onResize);window.removeEventListener('keydown',handler);menuButton.current?.focus();};
+  },[menu]);
+  useEffect(()=>{
     const onStorage=(e:StorageEvent)=>{
       if(e.key===`${KEY}.results`){const r=read<Result[]>('results',[]);setResults(Array.isArray(r)?r:[]);}
       if(e.key===`${KEY}.${mode}`&&!lock.current)void load(mode);
@@ -64,6 +84,7 @@ export default function Home(){
   const submit=useCallback(async()=>{
     if(!game||game.status!=='playing'||lock.current||expired)return;
     if(input.length!==5){setError('Potrebuješ še '+(5-input.length)+' '+(5-input.length===1?'črko.':'črke.'));return;}
+    if(input.includes('_')){setError('Pred potrditvijo zamenjaj vse znake _ s črkami.');return;}
     lock.current=true;setBusy(true);setError('');
     try{const g=await request({action:'guess',token:game.token,word:input});commit(g);if(g.status!=='playing')setPanel('result');}
     catch(e){setError(e instanceof Error?e.message:'Povezava ni uspela. Poskusi znova.');}
@@ -74,7 +95,7 @@ export default function Home(){
     setError('');
     if(key==='ENTER'){void submit();return;}
     if(key==='BACKSPACE'){setInput(v=>v.slice(0,-1));return;}
-    if(/^[A-ZČŠŽ]$/.test(key))setInput(v=>v.length<5?v+key:v);
+    if(/^[A-ZČŠŽ_]$/.test(key))setInput(v=>v.length<5?v+key:v);
   },[panel,menu,busy,game,expired,submit]);
   useEffect(()=>{
     const handler=(e:KeyboardEvent)=>{
@@ -82,11 +103,12 @@ export default function Home(){
       if((e.target as HTMLElement).matches('input,textarea,select'))return;
       if(e.key==='Enter' && (e.target as HTMLElement).closest('button') && !(e.target as HTMLElement).closest('.keyboard'))return;
       const key=e.key.toLocaleUpperCase('sl-SI');
-      if(key==='BACKSPACE'||key==='ENTER'||/^[A-ZČŠŽ]$/.test(key)){if(!panel&&!menu)e.preventDefault();keyPress(key);}
+      if(key==='BACKSPACE'||key==='ENTER'||/^[A-ZČŠŽ_]$/.test(key)){if(!panel&&!menu)e.preventDefault();keyPress(key);}
     };window.addEventListener('keydown',handler);return()=>window.removeEventListener('keydown',handler);
   },[keyPress,panel,menu]);
   const summary=summarize(results,statsMode,today||undefined);
   const complete=game&&game.status!=='playing';
+  const usedLetters=new Set(game?.guesses.flatMap(guess=>Array.from(guess.word))||[]);
   const dayLabel=game?new Intl.DateTimeFormat('sl-SI',{day:'numeric',month:'long',year:'numeric',timeZone:'Europe/Ljubljana'}).format(new Date(game.day+'T12:00:00Z')):'Danes';
   function remaining(){if(!now)return '—';const sec=secondsUntilMidnight(now);return `${Math.floor(sec/3600).toString().padStart(2,'0')}:${Math.floor(sec%3600/60).toString().padStart(2,'0')}:${(sec%60).toString().padStart(2,'0')}`;}
 
@@ -106,8 +128,8 @@ export default function Home(){
       <div className="sidebar-bottom"><div className="mini-score"><span>5</span><span>0</span><span>0</span></div><p>Malo besed.<br/>Veliko dobrih potez.</p><small>Slovenska besedna igra</small></div>
     </aside>
     <div className="main-shell">
-      <header className="topbar"><span className="desktop-label">BESEDNA TELOVADBA</span><a className="mobile-brand" href="/">petka<span>.</span></a><div className="header-actions"><span className="language">SL</span><button className="icon-button" aria-label="Kako igrati" onClick={()=>setPanel('help')}><CircleHelp size={21}/></button><button className="icon-button" aria-label="Statistika" onClick={()=>{setStatsMode(mode);setPanel('stats');}}><BarChart3 size={21}/></button><button className="icon-button menu-toggle" aria-label="Odpri meni" aria-expanded={menu} onClick={()=>setMenu(!menu)}>{menu?<X/>:<Menu/>}</button></div></header>
-      {menu&&<div className="mobile-menu"><nav aria-label="Mobilni meni">{navigation}</nav><button className="menu-dismiss" onClick={()=>setMenu(false)}>Zapri meni</button></div>}
+      <header className="topbar"><span className="desktop-label">BESEDNA TELOVADBA</span><a className="mobile-brand" href="/">petka<span>.</span></a><div className="header-actions"><span className="language">SL</span><button className="icon-button" aria-label="Kako igrati" onClick={()=>setPanel('help')}><CircleHelp size={21}/></button><button className="icon-button" aria-label="Statistika" onClick={()=>{setStatsMode(mode);setPanel('stats');}}><BarChart3 size={21}/></button><button ref={menuButton} className="icon-button menu-toggle" aria-label={menu?'Zapri meni':'Odpri meni'} aria-expanded={menu} aria-controls="mobile-navigation" onClick={()=>setMenu(!menu)}>{menu?<X/>:<Menu/>}</button></div></header>
+      {menu&&<><button className="menu-backdrop" aria-label="Zapri meni" tabIndex={-1} onClick={()=>setMenu(false)}/><div ref={menuPanel} id="mobile-navigation" className="mobile-menu" role="dialog" aria-modal="true" aria-label="Meni"><div className="mobile-menu-heading"><span>Izberi svojo igro</span><strong>Kam greva?</strong></div><nav aria-label="Mobilni meni">{navigation}</nav><button className="menu-dismiss" onClick={()=>setMenu(false)}>Nazaj k igri <ChevronRight size={16}/></button></div></>}
       <main className="game-area">
         <div className="game-heading"><div><div className="eyebrow"><span className="pill">{mode==='daily'?'DNEVNI IZZIV':'BREZ OMEJITEV'}</span><span>{mode==='daily'?dayLabel:'Tvoj tempo. Tvoje besede.'}</span></div><h1>{mode==='daily'?'Današnjih pet.':'Samo še eno.'}</h1><p>Odkrij besedo. Sledi številkam.</p></div><div className="heading-icon">{mode==='daily'?<CalendarDays size={30}/>:<InfinityIcon size={34}/>}</div></div>
         <section className="board-section" aria-label="Igralna plošča" aria-busy={busy}>
@@ -116,7 +138,7 @@ export default function Home(){
             {Array.from({length:MAX_GUESSES},(_,i)=>{
               const guess=game?.guesses[i],active=!complete&&i===(game?.guesses.length||0),word=guess?.word||(active?input:'');
               return <div role="listitem" key={`${game?.id}-${i}`} className={`board-row ${active?'current':''} ${guess?'submitted':''} ${guess?.clue.green===5?'winning':''}`} aria-label={guess?`${i+1}. poskus: ${guess.word}, ${guess.clue.green} na pravem mestu, ${guess.clue.yellow} na drugem mestu, ${guess.clue.red} brez ujemanja`:`${i+1}. poskus, ${active?word||'vnesi besedo':'prazen'}`}>
-                <div className="letters" aria-hidden="true">{Array.from({length:5},(_,j)=><span key={j} className={`letter ${word[j]?'filled':''} ${active&&j===word.length?'cursor':''}`}>{word[j]||''}</span>)}</div>
+                <div className="letters" aria-hidden="true">{Array.from({length:5},(_,j)=><span key={j} className={`letter ${word[j]?'filled':''} ${active&&j===word.length?'cursor':''} ${active&&word[j]==='_'?'unknown':''}`}>{word[j]||''}</span>)}</div>
                 <div className={`clues ${guess?'revealed':''}`} aria-hidden="true"><span className="green">{guess?.clue.green??'·'}</span><span className="yellow">{guess?.clue.yellow??'·'}</span><span className="red">{guess?.clue.red??'·'}</span></div>
               </div>;
             })}
@@ -124,9 +146,11 @@ export default function Home(){
           <div className="board-message" role="status" aria-live="polite">{error?<span className="error">{error}</span>:busy?'Pripravljam igro …':expired?'Nov dan, nov izziv.':complete?(game.status==='won'?'Odlično! Pet pravih na pravem mestu.':'Dobra vaja. Naslednja beseda je nova priložnost.'):'Vsaka številka je nov namig.'}</div>
           {!game&&!busy&&<button className="primary retry" onClick={()=>void load(mode)}>Poskusi znova</button>}
           {expired?<button className="primary wide" onClick={()=>void load('daily',true)}>Odpri današnji izziv</button>:complete?<div className="completed-actions"><button className="primary" onClick={()=>mode==='unlimited'?void load(mode,true):void load('unlimited')}><InfinityIcon size={19}/>{mode==='unlimited'?'Nova beseda':'Igraj neskončno'}</button><button className="secondary" onClick={()=>setPanel('result')}>Rezultat</button></div>:<div className="keyboard" aria-label="Slovenska tipkovnica">
-            {['ERTZUIOPŠŽ','ASDFGHJKLČ','CVBNM'].map((row,i)=><div className="key-row" key={row}>{i===2&&<button className="key key-enter" disabled={busy||!game} onClick={()=>keyPress('ENTER')} aria-label="Potrdi besedo"><Check size={18}/><span>Potrdi</span></button>}{Array.from(row).map(k=><button className="key" key={k} disabled={busy||!game} onClick={()=>keyPress(k)} aria-label={`Črka ${k}`}>{k}</button>)}{i===2&&<button className="key key-delete" disabled={busy||!game} onClick={()=>keyPress('BACKSPACE')} aria-label="Izbriši zadnjo črko"><Delete size={21}/></button>}</div>)}
+            {['ERTZUIOPŠŽ','ASDFGHJKLČ','CVBNM_'].map((row,i)=><div className="key-row" key={row}>{i===2&&<button className="key key-enter" disabled={busy||!game} onClick={()=>keyPress('ENTER')} aria-label="Potrdi besedo"><Check size={20}/><span>Potrdi</span></button>}{Array.from(row).map(k=><button className={`key ${k==='_'?'key-unknown':''} ${usedLetters.has(k)?'key-used':''}`} key={k} disabled={busy||!game} onClick={()=>keyPress(k)} aria-label={k==='_'?'Označi neznano črko':`Črka ${k}`}>{k}</button>)}{i===2&&<button className="key key-delete" disabled={busy||!game} onClick={()=>keyPress('BACKSPACE')} aria-label="Izbriši črko"><Delete size={21}/></button>}</div>)}
           </div>}
         </section>
+        {mode==='unlimited'&&game?.status==='playing'&&<div className="restart-actions"><button className="restart-button" disabled={busy} onClick={e=>{e.currentTarget.blur();void load('unlimited',true);}}><RotateCcw size={17}/>Nova igra</button><span>Začni znova z novo besedo.</span></div>}
+        {!complete&&<p className="draft-hint">_ označi neznanko. Črke popravljaš z brisanjem od konca.</p>}
         <div className="legend"><span><i className="green"/>Pravo mesto</span><span><i className="yellow"/>Drugo mesto</span><span><i className="red"/>Brez ujemanja</span></div>
         <footer className="game-footer"><span>{mode==='daily'?'Ista beseda za vse. Nov izziv ob polnoči.':'Naključna beseda. Osem novih priložnosti.'}</span><span>Č, Š in Ž štejejo.</span></footer>
         <p className="demo-note">{game?.dictionary==='sloleks'?<>Slovar: <a href="https://www.clarin.si/repository/xmlui/handle/11356/2080" target="_blank" rel="noreferrer">Sloleks 3.1</a> · <a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noreferrer">CC BY-SA 4.0</a></>:'Začetni izbor · omejen slovar besed'}</p>
@@ -135,7 +159,7 @@ export default function Home(){
     </div>
     <dialog ref={dialog} className={`modal ${panel==='help'?'help-modal':''}`} onCancel={e=>{e.preventDefault();closePanel();}} onClick={e=>{if(e.target===dialog.current)closePanel();}} aria-labelledby="dialog-title">
       <div className="modal-content"><button className="modal-close icon-button" onClick={closePanel} aria-label="Zapri"><X size={21}/></button>
-      {panel==='help'&&<><span className="modal-kicker">DOBRODOŠEL V PETKI</span><h2 id="dialog-title">Pet črk.<br/>Osem priložnosti.</h2><p className="modal-intro">Ugani slovensko besedo s petimi črkami. Za rešitve izbiramo običajne samostalnike v osnovni obliki. Po vsakem poskusu dobiš tri številke — katere črke se ujemajo, odkriješ sam.</p><div className="example"><div className="example-word">{'TRASA'.split('').map((l,i)=><span key={i}>{l}</span>)}</div><div className="example-clues"><span className="green">3</span><span className="yellow">1</span><span className="red">1</span></div></div><p className="example-caption">Če je rešitev <b>VRATA</b>, dobi poskus <b>TRASA</b>:</p><div className="help-rules"><div><span className="rule-number green">3</span><p><b>Na pravem mestu</b><span>Tri črke so na svojih mestih.</span></p></div><div><span className="rule-number yellow">1</span><p><b>Na drugem mestu</b><span>Ena črka je v besedi, a drugje.</span></p></div><div><span className="rule-number red">1</span><p><b>Brez ujemanja</b><span>Ena črka nima preostalega ujemanja.</span></p></div></div><div className="help-note"><Sparkles size={19}/><span>Vsaka črka v rešitvi šteje le enkrat. Če jo ponoviš prevečkrat, presežek šteje rdeče.</span></div><p className="small-copy">Uporabi tipkovnico ali gumbe spodaj. Č, Š in Ž so svoje črke. Lastna imena in kratice niso dovoljene. Sprejete so tudi oblike iz igralnega slovarja.</p>{game?.dictionary==='sloleks'&&<p className="small-copy">Besedni vir: Sloleks 3.1, Čibej, Jaka; Gantar, Kaja; Dobrovoljc, Kaja; Krek, Simon; Holozan, Peter; Erjavec, Tomaž; Romih, Miro; Arhar Holdt, Špela; Krsnik, Luka; Robnik-Šikonja, Marko. CJVT UL, 2026. Prilagoditev: izbor petčrkovnih oblik, filtriranje in združevanje dvojnikov za Petko. <a href="https://www.clarin.si/repository/xmlui/handle/11356/2080" target="_blank" rel="noreferrer">Vir</a> · <a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noreferrer">CC BY-SA 4.0</a>.</p>}<button className="primary wide" onClick={closePanel}>Razumem, igrajmo!</button></>}
+      {panel==='help'&&<><span className="modal-kicker">DOBRODOŠEL V PETKI</span><h2 id="dialog-title">Pet črk.<br/>Osem priložnosti.</h2><p className="modal-intro">Ugani slovensko besedo s petimi črkami. Za rešitve izbiramo običajne samostalnike v osnovni obliki. Po vsakem poskusu dobiš tri številke — katere črke se ujemajo, odkriješ sam.</p><div className="example"><div className="example-word">{'TRASA'.split('').map((l,i)=><span key={i}>{l}</span>)}</div><div className="example-clues"><span className="green">3</span><span className="yellow">1</span><span className="red">1</span></div></div><p className="example-caption">Če je rešitev <b>VRATA</b>, dobi poskus <b>TRASA</b>:</p><div className="help-rules"><div><span className="rule-number green">3</span><p><b>Na pravem mestu</b><span>Tri črke so na svojih mestih.</span></p></div><div><span className="rule-number yellow">1</span><p><b>Na drugem mestu</b><span>Ena črka je v besedi, a drugje.</span></p></div><div><span className="rule-number red">1</span><p><b>Brez ujemanja</b><span>Ena črka nima preostalega ujemanja.</span></p></div></div><div className="help-note"><Sparkles size={19}/><span>Vsaka črka v rešitvi šteje le enkrat. Če jo ponoviš prevečkrat, presežek šteje rdeče.</span></div><p className="small-copy">Uporabi tipkovnico ali gumbe spodaj. Znak _ označi neznano mesto v osnutku. Za popravek izbriši črke od konca do želenega mesta in jih znova vpiši. Pred potrditvijo zapolni vseh pet mest s črkami. Č, Š in Ž so svoje črke. Lastna imena in kratice niso dovoljene. Sprejete so tudi oblike iz igralnega slovarja.</p>{game?.dictionary==='sloleks'&&<p className="small-copy">Besedni vir: Sloleks 3.1, Čibej, Jaka; Gantar, Kaja; Dobrovoljc, Kaja; Krek, Simon; Holozan, Peter; Erjavec, Tomaž; Romih, Miro; Arhar Holdt, Špela; Krsnik, Luka; Robnik-Šikonja, Marko. CJVT UL, 2026. Prilagoditev: izbor petčrkovnih oblik, filtriranje in združevanje dvojnikov za Petko. <a href="https://www.clarin.si/repository/xmlui/handle/11356/2080" target="_blank" rel="noreferrer">Vir</a> · <a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noreferrer">CC BY-SA 4.0</a>.</p>}<button className="primary wide" onClick={closePanel}>Razumem, igrajmo!</button></>}
       {panel==='stats'&&<><span className="modal-kicker">VSAKA POTEZA ŠTEJE</span><h2 id="dialog-title">Tvoja statistika.</h2><div className="segmented"><button className={statsMode==='daily'?'selected':''} onClick={()=>setStatsMode('daily')}>Dnevni izziv</button><button className={statsMode==='unlimited'?'selected':''} onClick={()=>setStatsMode('unlimited')}>Neskončno</button></div><div className="stat-grid"><div><strong>{summary.played}</strong><span>Odigranih</span></div><div><strong>{summary.rate}<small>%</small></strong><span>Zmag</span></div><div><strong>{summary.streak}</strong><span>Trenutni niz</span></div><div><strong>{summary.best}</strong><span>Najboljši niz</span></div></div><h3>Poskusi do zmage</h3><div className="distribution">{summary.distribution.map((n,i)=><div key={i}><span>{i+1}</span><div><b style={{width:`${Math.max(7,n/Math.max(1,...summary.distribution)*100)}%`}} className={n?'has-wins':''}>{n}</b></div></div>)}</div>{!summary.played&&<p className="empty-copy">Prva odigrana igra bo začetek tvoje statistike.</p>}<p className="small-copy">Statistika se hrani samo v tem brskalniku. Izbris podatkov jo ponastavi. {statsMode==='daily'?'Niz pomeni zaporedne dneve z zmago.':'Niz pomeni zaporedne zmage v neskončnem načinu.'}</p></>}
       {panel==='result'&&game&&<><div className={`result-icon ${game.status==='won'?'victory':''}`}>{game.status==='won'?<Trophy size={34}/>:<Sparkles size={34}/>}</div><span className="modal-kicker">{game.status==='won'?'PET OD PET':'DOBRA BESEDNA VADBA'}</span><h2 id="dialog-title">{game.status==='won'?(game.guesses.length<=3?'Kapo dol!':'Bravo, uspelo ti je!'):'Naslednja bo tvoja.'}</h2><p className="modal-intro">{game.status==='won'?`Besedo si odkril v ${game.guesses.length}. poskusu.`:'Vsak poskus šteje. Poskusi znova z novo besedo.'}</p><div className="answer-label">ISKANA BESEDA</div><div className="result-answer">{game.answer?.split('').map((l,i)=><span key={i}>{l}</span>)}</div>{mode==='daily'&&<div className="countdown"><span>Naslednji dnevni izziv</span><strong>{expired?'Na voljo!':remaining()}</strong></div>}<button className="primary wide" disabled={busy} onClick={()=>{closePanel();void load('unlimited',mode==='unlimited');}}><InfinityIcon size={20}/>{mode==='daily'?'Nadaljuj v neskončnem načinu':'Nova beseda'}</button><button className="text-button" onClick={()=>{setStatsMode(mode);setPanel('stats');}}>Poglej statistiko <ChevronRight size={17}/></button></>}
       </div>
